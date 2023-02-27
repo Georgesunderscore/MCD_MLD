@@ -101,11 +101,11 @@ HAVING c IN (SELECT MAX(t.c) FROM
 				
 #11. Combien existe-t-il de casques de chaque type et quel est leur coût total ? (classés par nombre décroissant)
 
-SELECT COUNT(*) c , tc.nom_type_casque , sum(c.cout_casque) from prendre_casque pc
+SELECT COUNT(*) AS nbCasques , tc.nom_type_casque , sum(c.cout_casque) AS total from prendre_casque pc
 INNER JOIN casque c ON pc.id_casque = c.id_casque
 INNER JOIN type_casque tc ON c.id_type_casque = tc.id_type_casque
 GROUP BY tc.nom_type_casque
-ORDER BY COUNT(*) DESC;
+ORDER BY nbCasques DESC;
 
 
 #12. Nom des potions dont un des ingrédients est le poisson frais.
@@ -118,18 +118,32 @@ WHERE i.nom_ingredient = 'Poisson frais';
 
 #13. Nom du / des lieu(x) possédant le plus d'habitants, en dehors du village gaulois.
 
-#SELECT l.nom_lieu ,COUNT(*) c from personnage p
-#INNER JOIN lieu l ON p.id_lieu = l.id_lieu
-#GROUP BY l.id_lieu , l.nom_lieu 
-#HAVING c IN (
-#				SELECT MAX(t.c) FROM 
-				#(
+SELECT l.nom_lieu ,COUNT(*) c from personnage p
+INNER JOIN lieu l ON p.id_lieu = l.id_lieu
+GROUP BY l.id_lieu , l.nom_lieu 
+HAVING l.nom_lieu <> 'Village gaulois'
+and c IN (
+				SELECT MAX(t.c) FROM 
+				(
 				 SELECT l.nom_lieu ,COUNT(*) c from personnage p
 				 INNER JOIN lieu l ON p.id_lieu = l.id_lieu
 				 GROUP BY l.id_lieu , l.nom_lieu 
 				 HAVING l.nom_lieu <> 'Village gaulois') t
-				#);
+				);
 				
+Autre VERSION pour le 13 
+
+SELECT l.nom_lieu, COUNT(p.id_personnage) AS nb
+FROM personnage p, lieu l
+WHERE p.id_lieu = l.id_lieu 
+AND l.nom_lieu != 'Village gaulois'
+GROUP BY l.id_lieu
+HAVING nb >= ALL ( 
+SELECT COUNT(p.id_personnage)
+        FROM personnage p, lieu l
+        WHERE l.id_lieu = p.id_lieu
+        AND l.nom_lieu != 'Village gaulois'
+GROUP BY l.id_lieu)
 				
 #14. Nom des personnages qui n'ont jamais bu aucune potion. outer join left 
 
@@ -148,13 +162,19 @@ WHERE per.id_personnage NOT IN (SELECT p.id_personnage from personnage p
 #DML commands 
 
 #A. Ajoutez le personnage suivant : Champdeblix, agriculteur résidant à la ferme Hantassion de Rotomagus.
-INSERT INTO personnage (nom_personnage ,adresse_personnage ,id_lieu , id_specialite)
-VALUES ('Champdeblix', 'ferme Hantassion' , 6,12);
+INSERT INTO personnage (nom_personnage, adresse_personnage, id_lieu, id_specialite)
+VALUES (
+        'Champdeblix', 
+        'Ferme Hantassion', 
+        (SELECT id_lieu FROM lieu WHERE nom_lieu = 'Rotomagus'),
+(SELECT id_specialite FROM specialite WHERE nom_specialite = 'Agriculteur')
+)
 
 #B. Autorisez Bonemine à boire de la potion magique, elle est jalouse d'Iélosubmarine...
 INSERT INTO autoriser_boire (id_potion , id_personnage)
-VALUES (1,12);
-
+VALUES ((SELECT p.id_potion FROM potion p WHERE p.nom_potion = 'Magique'),
+			(SELECT pr.id_personnage FROM personnage pr WHERE pr.nom_personnage = 'Bonemine'))
+			
 #C. Supprimez les casques grecs qui n'ont jamais été pris lors d'une bataille.
 DELETE from casque c
 WHERE c.id_casque not IN (select pc.id_casque FROM prendre_casque pc )
@@ -169,14 +189,13 @@ UPDATE personnage p
 SET p.adresse_personnage = 'prison à Condate' , 
 	 P.id_lieu = (SELECT lieu_id FROM lieu WHERE nom_lieu = 'Condate' )
 WHERE p.nom_personnage ='Zérozérosix'  ;
+
 									
 #E. La potion 'Soupe' ne doit plus contenir de persil.
 
-DELETE FROM potion p
-INNER JOIN composer c ON p.id_potion = c.id_potion
-INNER JOIN ingredient i ON c.id_ingredient =i.id_ingredient
-WHERE p.nom_potion = 'Soupe'
-AND i.nom_ingredient = 'Persil';
+delete  from composer c
+WHERE c.id_ingredient = (SELECT i.id_ingredient from ingredient i where i.nom_ingredient = 'Persil')
+AND c.id_potion = (SELECT p.id_potion from potion p WHERE p.nom_potion = 'Soupe')
 
 #F. Obélix s'est trompé : ce sont 42 casques Weisenau, et non Ostrogoths, qu'il a pris lors de la bataille 'Attaque de la banque postale'. Corrigez son erreur !
 
