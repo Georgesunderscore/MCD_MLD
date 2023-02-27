@@ -61,6 +61,24 @@ HAVING c IN (SELECT MAX(t.c) FROM
 											GROUP BY p.nom_personnage , b.nom_bataille) t
 					);
 					
+#8 avec view 
+CREATE OR REPLACE  VIEW CASQUES_GAULOIS_BATAILLE AS
+SELECT SUM(pc.qte) total, p.nom_personnage nom from bataille b
+INNER JOIN prendre_casque pc ON b.id_bataille = pc.id_bataille
+INNER JOIN personnage p ON pc.id_personnage = p.id_personnage
+WHERE b.nom_bataille = 'Bataille du village gaulois'
+GROUP BY p.nom_personnage;
+
+SELECT v.nom , v.total 
+FROM casques_gaulois_bataille v
+HAVING v.total IN ( 
+						SELECT max(v.total) 
+						FROM casques_gaulois_bataille v
+						);
+					
+					
+
+					
 					
 #9. Nom des personnages et leur quantité de potion bue (en les classant du plus grand buveur au plus petit).
 
@@ -100,18 +118,20 @@ WHERE i.nom_ingredient = 'Poisson frais';
 
 #13. Nom du / des lieu(x) possédant le plus d'habitants, en dehors du village gaulois.
 
-SELECT l.nom_lieu ,COUNT(*) c from personnage p
-INNER JOIN lieu l ON p.id_lieu = l.id_lieu
-GROUP BY l.id_lieu , l.nom_lieu 
-HAVING c IN (SELECT MAX(t.c) FROM 
-				(SELECT l.nom_lieu ,COUNT(*) c from personnage p
+#SELECT l.nom_lieu ,COUNT(*) c from personnage p
+#INNER JOIN lieu l ON p.id_lieu = l.id_lieu
+#GROUP BY l.id_lieu , l.nom_lieu 
+#HAVING c IN (
+#				SELECT MAX(t.c) FROM 
+				#(
+				 SELECT l.nom_lieu ,COUNT(*) c from personnage p
 				 INNER JOIN lieu l ON p.id_lieu = l.id_lieu
 				 GROUP BY l.id_lieu , l.nom_lieu 
 				 HAVING l.nom_lieu <> 'Village gaulois') t
-				);
+				#);
 				
 				
-#14. Nom des personnages qui n'ont jamais bu aucune potion.
+#14. Nom des personnages qui n'ont jamais bu aucune potion. outer join left 
 
 SELECT p.nom_personnage from personnage p
 LEFT JOIN boire b ON p.id_personnage =b.id_personnage
@@ -120,9 +140,51 @@ WHERE b.id_potion IS NULL;
 #15. Nom du / des personnages qui n'ont pas le droit de boire de la potion 'Magique'.
 
 SELECT * FROM personnage per
-WHERE per.nom_personnage NOT IN (SELECT p.nom_personnage from personnage p
+WHERE per.id_personnage NOT IN (SELECT p.id_personnage from personnage p
 											INNER JOIN autoriser_boire ab ON p.id_personnage =ab.id_personnage
 											INNER JOIN potion po ON ab.id_potion=po.id_potion
 											WHERE po.nom_potion = 'Magique')
 
+#DML commands 
+
+#A. Ajoutez le personnage suivant : Champdeblix, agriculteur résidant à la ferme Hantassion de Rotomagus.
+INSERT INTO personnage (nom_personnage ,adresse_personnage ,id_lieu , id_specialite)
+VALUES ('Champdeblix', 'ferme Hantassion' , 6,12);
+
+#B. Autorisez Bonemine à boire de la potion magique, elle est jalouse d'Iélosubmarine...
+INSERT INTO autoriser_boire (id_potion , id_personnage)
+VALUES (1,12);
+
+#C. Supprimez les casques grecs qui n'ont jamais été pris lors d'une bataille.
+DELETE from casque c
+WHERE c.id_casque not IN (select pc.id_casque FROM prendre_casque pc )
+
+SELECT p.id_personnage ,p.id_lieu FROM personnage p
+									WHERE p.nom_personnage ='Zérozérosix'  ;
+									
+					
+#D. Modifiez l'adresse de Zérozérosix : il a été mis en prison à Condate.
+
+UPDATE personnage p
+SET p.adresse_personnage = 'prison à Condate' , 
+	 P.id_lieu = (SELECT lieu_id FROM lieu WHERE nom_lieu = 'Condate' )
+WHERE p.nom_personnage ='Zérozérosix'  ;
+									
+#E. La potion 'Soupe' ne doit plus contenir de persil.
+
+DELETE FROM potion p
+INNER JOIN composer c ON p.id_potion = c.id_potion
+INNER JOIN ingredient i ON c.id_ingredient =i.id_ingredient
+WHERE p.nom_potion = 'Soupe'
+AND i.nom_ingredient = 'Persil';
+
+#F. Obélix s'est trompé : ce sont 42 casques Weisenau, et non Ostrogoths, qu'il a pris lors de la bataille 'Attaque de la banque postale'. Corrigez son erreur !
+
+UPDATE prendre_casque pc
+SET pc.id_casque = (SELECT c.id_casque FROM casque c WHERE c.nom_casque ='Weisenau'),
+    pc.qte  = 42
+WHERE pc.id_bataille IN (SELECT b.id_bataille FROM bataille b
+								 WHERE b.nom_bataille = 'Attaque de la banque postale')
+
+									
 
